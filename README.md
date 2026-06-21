@@ -4,6 +4,9 @@
 
 A cybersecurity tool that checks whether your password has appeared in known data breaches, using the **k-Anonymity** model to ensure your password **never leaves your device**.
 
+<img width="1918" height="890" alt="image" src="https://github.com/user-attachments/assets/6a4f2fb6-dea4-4a0d-9f17-7f47e8995e94" />
+
+
 ---
 
 ## How k-Anonymity works
