@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PwnedChecker — ¿Fue vulnerada tu contraseña?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg-card: #111118;
+    --bg-input: #0d0d14;
+    --border: rgba(255,255,255,0.08);
+    --border-focus: rgba(120,100,255,0.6);
+    --text-primary: #e8e8f0;
+    --text-muted: #6b6b80;
+    --text-hint: #3d3d50;
+    --accent: #7864ff;
+    --accent-dim: rgba(120,100,255,0.12);
+    --green: #22c98a;
+    --green-dim: rgba(34,201,138,0.1);
+    --red: #ff4d6d;
+    --red-dim: rgba(255,77,109,0.1);
+    --amber: #f59e0b;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  /* Ambient grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(120,100,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,100,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 2.5rem; }
+
+  .logo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(120,100,255,0.25);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+  }
+
+  .logo-badge .dot {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(1.6rem, 5vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 0.6rem;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 380px;
+    margin: 0 auto;
+  }
+
+  /* Card */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    transition: border-color 0.4s ease;
+  }
+
+  .card.state-safe { border-color: rgba(34,201,138,0.4); }
+  .card.state-pwned { border-color: rgba(255,77,109,0.4); }
+
+  /* Input group */
+  .input-label {
+    display: block;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .input-wrap {
+    position: relative;
+    margin-bottom: 1rem;
+  }
+
+  .password-input {
+    width: 100%;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 48px 14px 16px;
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    caret-color: var(--accent);
+  }
+
+  .password-input::placeholder { color: var(--text-hint); }
+
+  .password-input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(120,100,255,0.1);
+  }
+
+  .eye-btn {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.2s;
+  }
+  .eye-btn:hover { color: var(--text-primary); }
+  .eye-btn svg { width: 18px; height: 18px; }
+
+  /* Strength meter */
+  .strength-section { margin-bottom: 1.25rem; }
+
+  .strength-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .strength-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .strength-value {
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: color 0.3s;
+  }
+
+  .strength-bars {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+
+  .bar {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--text-hint);
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+
+  .bar.active { transform: scaleY(1.5); }
+  .bar.weak { background: var(--red); }
+  .bar.fair { background: var(--amber); }
+  .bar.good { background: #60a5fa; }
+  .bar.strong { background: var(--green); }
+
+  /* Criteria */
+  .criteria {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+
+  .criteria.visible { opacity: 1; transform: translateY(0); }
+
+  .criterion {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: color 0.2s;
+  }
+
+  .criterion.met { color: var(--green); }
+
+  .criterion-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--text-hint);
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  .criterion.met .criterion-dot { background: var(--green); }
+
+  /* Button */
+  .check-btn {
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .check-btn:hover { opacity: 0.88; }
+  .check-btn:active { transform: scale(0.985); }
+  .check-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn-text { transition: opacity 0.2s; }
+  .btn-loader { display: none; }
+
+  .check-btn.loading .btn-text { display: none; }
+  .check-btn.loading .btn-loader { display: inline; }
+
+  /* Result */
+  .result {
+    margin-top: 1.5rem;
+    border-radius: var(--radius-sm);
+    padding: 1.25rem;
+    display: none;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result.safe {
+    display: block;
+    background: var(--green-dim);
+    border: 1px solid rgba(34,201,138,0.2);
+  }
+
+  .result.pwned {
+    display: block;
+    background: var(--red-dim);
+    border: 1px solid rgba(255,77,109,0.2);
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .result-icon { font-size: 20px; line-height: 1; }
+
+  .result-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .safe .result-title { color: var(--green); }
+  .pwned .result-title { color: var(--red); }
+
+  .result-body {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .result-body strong { color: var(--text-primary); }
+
+  .result-count {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--red);
+    display: block;
+    margin: 8px 0 4px;
+  }
+
+  /* Hash reveal */
+  .hash-info {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .hash-prefix {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* Error */
+  .error-msg {
+    margin-top: 1rem;
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.2);
+    font-size: 13px;
+    color: var(--amber);
+    display: none;
+  }
+
+  .error-msg.visible { display: block; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 12px;
+    color: var(--text-hint);
+    line-height: 1.7;
+  }
+
+  .footer a {
+    color: var(--text-muted);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    transition: color 0.2s;
+  }
+  .footer a:hover { color: var(--text-primary); }
+
+  /* Scanline animation on pwned state */
+  @keyframes scanline {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100%; }
+  }
+
+  body.state-pwned::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      transparent,
+      transparent 2px,
+      rgba(255,77,109,0.015) 2px,
+      rgba(255,77,109,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+    animation: scanline 3s linear infinite;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+  <header class="header">
+    <div class="logo-badge">
+      <span class="dot"></span>
+      k-Anonymity Protected
+    </div>
+    <h1>Pwned<span>Checker</span></h1>
+    <p class="subtitle">Verifica si tu contraseña apareció en alguna filtración de datos. Tu contraseña <strong>nunca sale de tu dispositivo</strong> — solo enviamos 5 caracteres de su hash.</p>
+  </header>
+
+  <div class="card" id="mainCard">
+
+    <label class="input-label" for="passwordInput">Contraseña a verificar</label>
+
+    <div class="input-wrap">
+      <input
+        type="password"
+        id="passwordInput"
+        class="password-input"
+        placeholder="Escribe tu contraseña..."
+        autocomplete="new-password"
+        spellcheck="false"
+      >
+      <button class="eye-btn" id="eyeBtn" type="button" aria-label="Mostrar/ocultar contraseña">
+        <svg id="eyeIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="strength-section">
+      <div class="strength-header">
+        <span class="strength-label">Fortaleza</span>
+        <span class="strength-value" id="strengthValue">—</span>
+      </div>
+      <div class="strength-bars">
+        <div class="bar" id="bar0"></div>
+        <div class="bar" id="bar1"></div>
+        <div class="bar" id="bar2"></div>
+        <div class="bar" id="bar3"></div>
+      </div>
+    </div>
+
+    <div class="criteria" id="criteria">
+      <div class="criterion" id="c-upper">
+        <div class="criterion-dot"></div>
+        Mayúsculas
+      </div>
+      <div class="criterion" id="c-lower">
+        <div class="criterion-dot"></div>
+        Minúsculas
+      </div>
+      <div class="criterion" id="c-number">
+        <div class="criterion-dot"></div>
+        Números
+      </div>
+      <div class="criterion" id="c-symbol">
+        <div class="criterion-dot"></div>
+        Símbolos
+      </div>
+      <div class="criterion" id="c-length">
+        <div class="criterion-dot"></div>
+        12+ caracteres
+      </div>
+      <div class="criterion" id="c-no-repeat">
+        <div class="criterion-dot"></div>
+        Sin repeticiones
+      </div>
+    </div>
+
+    <button class="check-btn" id="checkBtn" type="button">
+      <span class="btn-text">Verificar contraseña</span>
+      <span class="btn-loader">Consultando HIBP...</span>
+    </button>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <div class="result" id="resultBox">
+      <div class="result-header">
+        <span class="result-icon" id="resultIcon"></span>
+        <span class="result-title" id="resultTitle"></span>
+      </div>
+      <div class="result-body" id="resultBody"></div>
+      <div class="hash-info" id="hashInfo"></div>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    Funciona con <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange" target="_blank">Have I Been Pwned API</a> ·
+    <a href="https://en.wikipedia.org/wiki/K-anonymity" target="_blank">Modelo k-Anonymity</a><br>
+    Tu contraseña nunca se transmite. Solo se envían 5 caracteres del hash SHA-1.
+  </footer>
+</div>
+
+<script>
+const input = document.getElementById('passwordInput');
+const eyeBtn = document.getElementById('eyeBtn');
+const eyeIcon = document.getElementById('eyeIcon');
+const checkBtn = document.getElementById('checkBtn');
+const resultBox = document.getElementById('resultBox');
+const resultIcon = document.getElementById('resultIcon');
+const resultTitle = document.getElementById('resultTitle');
+const resultBody = document.getElementById('resultBody');
+const hashInfo = document.getElementById('hashInfo');
+const errorMsg = document.getElementById('errorMsg');
+const strengthValue = document.getElementById('strengthValue');
+const criteria = document.getElementById('criteria');
+const mainCard = document.getElementById('mainCard');
+const bars = [0,1,2,3].map(i => document.getElementById('bar' + i));
+
+const EYE_OPEN = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+const EYE_CLOSED = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+
+let showPassword = false;
+
+eyeBtn.addEventListener('click', () => {
+  showPassword = !showPassword;
+  input.type = showPassword ? 'text' : 'password';
+  eyeIcon.innerHTML = showPassword ? EYE_CLOSED : EYE_OPEN;
+});
+
+function analyzeStrength(pwd) {
+  if (!pwd) return { score: 0, label: '—', checks: {} };
+  const checks = {
+    upper: /[A-Z]/.test(pwd),
+    lower: /[a-z]/.test(pwd),
+    number: /[0-9]/.test(pwd),
+    symbol: /[^A-Za-z0-9]/.test(pwd),
+    length: pwd.length >= 12,
+    noRepeat: !/(.)(\1{2,})/.test(pwd)
+  };
+  const score = Object.values(checks).filter(Boolean).length;
+  const labels = ['—', 'Muy débil', 'Débil', 'Media', 'Buena', 'Fuerte', 'Excelente'];
+  const colors = ['', '#ff4d6d', '#ff4d6d', '#f59e0b', '#60a5fa', '#22c98a', '#22c98a'];
+  const barClasses = ['', 'weak', 'weak', 'fair', 'good', 'strong', 'strong'];
+  return { score, label: labels[score] || 'Excelente', color: colors[score], barClass: barClasses[score], checks };
+}
+
+input.addEventListener('input', () => {
+  const pwd = input.value;
+  clearResult();
+
+  if (!pwd) {
+    bars.forEach(b => { b.className = 'bar'; });
+    strengthValue.textContent = '—';
+    strengthValue.style.color = '';
+    criteria.classList.remove('visible');
+    return;
+  }
+
+  const { score, label, color, barClass, checks } = analyzeStrength(pwd);
+  criteria.classList.add('visible');
+
+  bars.forEach((bar, i) => {
+    bar.className = 'bar' + (i < score ? ` ${barClass} active` : '');
+  });
+
+  strengthValue.textContent = label;
+  strengthValue.style.color = color;
+
+  const criteriaMap = {
+    'c-upper': checks.upper,
+    'c-lower': checks.lower,
+    'c-number': checks.number,
+    'c-symbol': checks.symbol,
+    'c-length': checks.length,
+    'c-no-repeat': checks.noRepeat
+  };
+
+  for (const [id, met] of Object.entries(criteriaMap)) {
+    document.getElementById(id).classList.toggle('met', met);
+  }
+});
+
+function clearResult() {
+  resultBox.className = 'result';
+  errorMsg.className = 'error-msg';
+  mainCard.className = 'card';
+  document.body.className = '';
+}
+
+checkBtn.addEventListener('click', async () => {
+  const pwd = input.value.trim();
+  if (!pwd) return;
+
+  clearResult();
+  checkBtn.classList.add('loading');
+  checkBtn.disabled = true;
+
+  try {
+    const res = await fetch('/verificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+
+    if (res.status === 429) {
+      showError('⏱ Demasiadas consultas. Espera un minuto antes de intentar de nuevo.');
+      return;
+    }
+
+    const data = await res.json();
+
+    if (data.error) {
+      showError('Error: ' + data.error);
+      return;
+    }
+
+    showResult(data);
+
+  } catch (err) {
+    showError('No se pudo conectar con el servidor. ¿Está corriendo el backend?');
+  } finally {
+    checkBtn.classList.remove('loading');
+    checkBtn.disabled = false;
+  }
+});
+
+function showResult(data) {
+  if (data.vulnerada) {
+    resultBox.className = 'result pwned';
+    resultIcon.textContent = '🔴';
+    resultTitle.textContent = 'Contraseña comprometida';
+    resultBody.innerHTML = `Esta contraseña apareció en filtraciones de datos públicas:<br>
+      <span class="result-count">${data.veces.toLocaleString('es-PE')}</span>
+      veces registrada. <strong>No la uses en ningún servicio.</strong>`;
+    mainCard.className = 'card state-pwned';
+    document.body.className = 'state-pwned';
+  } else {
+    resultBox.className = 'result safe';
+    resultIcon.textContent = '🟢';
+    resultTitle.textContent = 'Sin filtraciones detectadas';
+    resultBody.innerHTML = `Esta contraseña <strong>no fue encontrada</strong> en las bases de datos de filtraciones conocidas. Recuerda que esto no garantiza que sea segura — también importa la fortaleza.`;
+    mainCard.className = 'card state-safe';
+  }
+
+  if (data.hash_prefix) {
+    hashInfo.innerHTML = `Prefijo SHA-1 enviado: <span class="hash-prefix">${data.hash_prefix}</span>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX<br>
+    Tu contraseña nunca viajó por la red.`;
+  }
+}
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.className = 'error-msg visible';
+}
+
+// Enter key support
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter') checkBtn.click();
+});
+</script>
+</body>
+</html>
