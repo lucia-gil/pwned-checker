@@ -6,432 +6,560 @@
 <title>PwnedChecker — ¿Fue vulnerada tu contraseña?</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  :root {
-    --bg: #0a0a0f;
-    --bg-card: #111118;
-    --bg-input: #0d0d14;
-    --border: rgba(255,255,255,0.08);
-    --border-focus: rgba(120,100,255,0.6);
-    --text-primary: #e8e8f0;
-    --text-muted: #6b6b80;
-    --text-hint: #3d3d50;
-    --accent: #7864ff;
-    --accent-dim: rgba(120,100,255,0.12);
-    --green: #22c98a;
-    --green-dim: rgba(34,201,138,0.1);
-    --red: #ff4d6d;
-    --red-dim: rgba(255,77,109,0.1);
-    --amber: #f59e0b;
-    --mono: 'JetBrains Mono', monospace;
-    --sans: 'Inter', sans-serif;
-    --radius: 12px;
-    --radius-sm: 8px;
-  }
+:root {
+  --bg: #080810;
+  --bg-card: #0f0f1a;
+  --bg-input: #13131f;
+  --bg-input-hover: #161624;
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(255,255,255,0.12);
+  --border-focus: rgba(120,100,255,0.55);
+  --text-primary: #eeeef5;
+  --text-secondary: #a0a0b8;
+  --text-muted: #5a5a72;
+  --text-hint: #32324a;
+  --accent: #7864ff;
+  --accent-light: #9b8fff;
+  --accent-dim: rgba(120,100,255,0.1);
+  --green: #1db87a;
+  --green-bright: #22d68e;
+  --green-dim: rgba(29,184,122,0.09);
+  --red: #e8415a;
+  --red-bright: #ff5c72;
+  --red-dim: rgba(232,65,90,0.09);
+  --amber: #e9a030;
+  --blue-mid: #5b9cf6;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+  --radius-card: 16px;
+  --radius-input: 10px;
+  --radius-btn: 10px;
+  --shadow-card: 0 24px 60px -10px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.05);
+}
 
-  body {
-    background: var(--bg);
-    color: var(--text-primary);
-    font-family: var(--sans);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem 1rem;
-    overflow-x: hidden;
-  }
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+  overflow-x: hidden;
+  position: relative;
+}
 
-  /* Ambient grid */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(120,100,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(120,100,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
+/* Subtle grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(120,100,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,100,255,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
 
-  .wrapper {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    max-width: 520px;
-  }
+/* Ambient glow behind card */
+.glow {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -58%);
+  width: 600px;
+  height: 500px;
+  background: radial-gradient(ellipse at center, rgba(120,100,255,0.07) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  transition: background 0.8s ease;
+}
+.glow.state-safe { background: radial-gradient(ellipse at center, rgba(29,184,122,0.07) 0%, transparent 70%); }
+.glow.state-pwned { background: radial-gradient(ellipse at center, rgba(232,65,90,0.08) 0%, transparent 70%); }
 
-  /* Header */
-  .header { text-align: center; margin-bottom: 2.5rem; }
+.wrapper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+}
 
-  .logo-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--accent-dim);
-    border: 1px solid rgba(120,100,255,0.25);
-    border-radius: 20px;
-    padding: 6px 14px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 1.25rem;
-  }
+/* ─── HEADER ─── */
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
 
-  .logo-badge .dot {
-    width: 6px;
-    height: 6px;
-    background: var(--accent);
-    border-radius: 50%;
-    animation: pulse 2s ease-in-out infinite;
-  }
+h1 {
+  font-family: var(--sans);
+  font-size: clamp(1.75rem, 5vw, 2.25rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 0.65rem;
+  color: var(--text-primary);
+}
+h1 em {
+  font-style: normal;
+  color: var(--accent-light);
+}
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
+.subtitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  max-width: 360px;
+  margin: 0 auto;
+}
 
-  h1 {
-    font-family: var(--mono);
-    font-size: clamp(1.6rem, 5vw, 2.2rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-    margin-bottom: 0.6rem;
-  }
+/* ─── CARD ─── */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 1.75rem;
+  transition: box-shadow 0.5s ease;
+  border: 1px solid transparent;
+}
+.card.state-safe {
+  border-color: rgba(29,184,122,0.2);
+  box-shadow: var(--shadow-card), 0 0 0 1px rgba(29,184,122,0.1);
+}
+.card.state-pwned {
+  border-color: rgba(232,65,90,0.2);
+  box-shadow: var(--shadow-card), 0 0 0 1px rgba(232,65,90,0.1);
+}
 
-  h1 span { color: var(--accent); }
+/* ─── LABEL ─── */
+.input-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 7px;
+  letter-spacing: 0;
+}
 
-  .subtitle {
-    font-size: 14px;
-    color: var(--text-muted);
-    line-height: 1.6;
-    max-width: 380px;
-    margin: 0 auto;
-  }
+/* ─── INPUT ─── */
+.input-wrap {
+  position: relative;
+  margin-bottom: 1.1rem;
+}
 
-  /* Card */
-  .card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 2rem;
-    transition: border-color 0.4s ease;
-  }
+.password-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  padding: 13px 82px 13px 15px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  caret-color: var(--accent-light);
+}
+.password-input::placeholder {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--text-hint);
+}
+.password-input:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-input-hover);
+}
+.password-input:focus {
+  border-color: var(--border-focus);
+  background: var(--bg-input-hover);
+  box-shadow: 0 0 0 3px rgba(120,100,255,0.12), inset 0 1px 2px rgba(0,0,0,0.3);
+}
 
-  .card.state-safe { border-color: rgba(34,201,138,0.4); }
-  .card.state-pwned { border-color: rgba(255,77,109,0.4); }
+/* ─── EYE BUTTON ─── */
+.eye-btn {
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+  border-radius: 6px;
+}
+.eye-btn:hover { color: var(--text-secondary); }
 
-  /* Input group */
-  .input-label {
-    display: block;
-    font-size: 11px;
-    font-family: var(--mono);
-    color: var(--text-muted);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
+/* ─── DICE BUTTON ─── */
+.dice-btn {
+  position: absolute;
+  right: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s, transform 0.15s;
+  border-radius: 6px;
+}
+.dice-btn:hover { color: var(--accent-light); }
+.dice-btn:active { transform: translateY(-50%) scale(0.85) rotate(20deg); }
 
-  .input-wrap {
-    position: relative;
-    margin-bottom: 1rem;
-  }
+.dice-svg { width: 17px; height: 17px; }
 
-  .password-input {
-    width: 100%;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 14px 48px 14px 16px;
-    font-family: var(--mono);
-    font-size: 15px;
-    color: var(--text-primary);
-    outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    caret-color: var(--accent);
-  }
+/* Separator between dice and eye */
+.input-divider {
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 16px;
+  background: var(--border-hover);
+  pointer-events: none;
+}
 
-  .password-input::placeholder { color: var(--text-hint); }
+/* Eye SVG parts — animated crossout */
+.eye-svg { width: 17px; height: 17px; overflow: visible; }
 
-  .password-input:focus {
-    border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px rgba(120,100,255,0.1);
-  }
+.eye-path-outer,
+.eye-path-pupil,
+.eye-path-slash { transition: opacity 0.2s ease; }
 
-  .eye-btn {
-    position: absolute;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-muted);
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    transition: color 0.2s;
-  }
-  .eye-btn:hover { color: var(--text-primary); }
-  .eye-btn svg { width: 18px; height: 18px; }
+.eye-path-slash { opacity: 0; }
+.eye-revealed .eye-path-outer { opacity: 0.5; }
+.eye-revealed .eye-path-slash { opacity: 1; }
 
-  /* Strength meter */
-  .strength-section { margin-bottom: 1.25rem; }
+/* ─── STRENGTH ─── */
+.strength-section { margin-bottom: 0.9rem; }
 
-  .strength-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 6px;
-  }
+.strength-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+}
 
-  .strength-label {
-    font-size: 11px;
-    font-family: var(--mono);
-    color: var(--text-muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
+.strength-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
 
-  .strength-value {
-    font-size: 11px;
-    font-family: var(--mono);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: color 0.3s;
-  }
+.strength-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  transition: opacity 0.2s;
+}
+.strength-hint.hidden { opacity: 0; pointer-events: none; }
 
-  .strength-bars {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-  }
+.strength-value {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: color 0.35s ease, opacity 0.2s;
+  opacity: 0;
+}
+.strength-value.visible { opacity: 1; }
 
-  .bar {
-    height: 3px;
-    border-radius: 2px;
-    background: var(--text-hint);
-    transition: background 0.3s ease, transform 0.2s ease;
-  }
+.strength-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
 
-  .bar.active { transform: scaleY(1.5); }
-  .bar.weak { background: var(--red); }
-  .bar.fair { background: var(--amber); }
-  .bar.good { background: #60a5fa; }
-  .bar.strong { background: var(--green); }
+.bar {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--text-hint);
+  transition: background 0.35s ease, transform 0.25s ease, opacity 0.25s ease;
+  opacity: 0.4;
+}
+.bar.lit { opacity: 1; }
+.bar.weak  { background: var(--red); }
+.bar.fair  { background: var(--amber); }
+.bar.good  { background: var(--blue-mid); }
+.bar.strong{ background: var(--green-bright); }
 
-  /* Criteria */
-  .criteria {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin-bottom: 1.5rem;
-    opacity: 0;
-    transform: translateY(-6px);
-    transition: opacity 0.25s ease, transform 0.25s ease;
-  }
+/* ─── CRITERIA ─── */
+.criteria-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease;
+  margin-bottom: 0;
+}
+.criteria-wrap.open {
+  grid-template-rows: 1fr;
+  margin-bottom: 1.1rem;
+}
+.criteria-inner { overflow: hidden; }
 
-  .criteria.visible { opacity: 1; transform: translateY(0); }
+.criteria {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 12px;
+  padding-top: 10px;
+}
 
-  .criterion {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-muted);
-    transition: color 0.2s;
-  }
+.criterion {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: color 0.25s ease;
+  user-select: none;
+}
 
-  .criterion.met { color: var(--green); }
+.criterion-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  position: relative;
+}
+/* Circle shape default */
+.criterion-icon::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--text-hint);
+  transition: background 0.25s, transform 0.2s;
+}
+/* Checkmark on met */
+.criterion.met .criterion-icon::before {
+  background: var(--green);
+  transform: scale(0.7);
+}
+.criterion.met .criterion-icon::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: var(--green-bright);
+  line-height: 14px;
+}
+.criterion.met { color: var(--green-bright); }
 
-  .criterion-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--text-hint);
-    flex-shrink: 0;
-    transition: background 0.2s;
-  }
+/* ─── BUTTON ─── */
+.check-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #8b78ff 0%, #6b54f0 100%);
+  border: none;
+  border-radius: var(--radius-btn);
+  padding: 13.5px 20px;
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(120,100,255,0.28), 0 1px 0 rgba(255,255,255,0.12) inset;
+  letter-spacing: 0.01em;
+}
+.check-btn:hover:not(:disabled) {
+  opacity: 0.92;
+  box-shadow: 0 6px 22px rgba(120,100,255,0.38), 0 1px 0 rgba(255,255,255,0.12) inset;
+}
+.check-btn:active:not(:disabled) { transform: scale(0.985); }
+.check-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-  .criterion.met .criterion-dot { background: var(--green); }
+/* Spinner inside button */
+.btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: rgba(255,255,255,0.85);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Button */
-  .check-btn {
-    width: 100%;
-    background: var(--accent);
-    border: none;
-    border-radius: var(--radius-sm);
-    padding: 14px;
-    font-family: var(--mono);
-    font-size: 14px;
-    font-weight: 600;
-    color: #fff;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: opacity 0.2s, transform 0.15s;
-    position: relative;
-    overflow: hidden;
-  }
+.check-btn.loading .spinner { display: block; }
+.check-btn.loading .btn-text { opacity: 0.7; }
 
-  .check-btn:hover { opacity: 0.88; }
-  .check-btn:active { transform: scale(0.985); }
-  .check-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* ─── ERROR ─── */
+.error-msg {
+  margin-top: 0.9rem;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: rgba(233,160,48,0.08);
+  border: 1px solid rgba(233,160,48,0.18);
+  font-size: 13px;
+  color: var(--amber);
+  display: none;
+  line-height: 1.5;
+}
+.error-msg.visible { display: block; }
 
-  .btn-text { transition: opacity 0.2s; }
-  .btn-loader { display: none; }
+/* ─── RESULT ─── */
+.result {
+  margin-top: 1rem;
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  display: none;
+  animation: fadeUp 0.3s ease;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-  .check-btn.loading .btn-text { display: none; }
-  .check-btn.loading .btn-loader { display: inline; }
+.result.safe  { display: block; background: var(--green-dim); border: 1px solid rgba(29,184,122,0.2); }
+.result.pwned { display: block; background: var(--red-dim);   border: 1px solid rgba(232,65,90,0.2); }
 
-  /* Result */
-  .result {
-    margin-top: 1.5rem;
-    border-radius: var(--radius-sm);
-    padding: 1.25rem;
-    display: none;
-    animation: slideIn 0.3s ease;
-  }
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 7px;
+}
 
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+.result-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.safe .result-status-dot  { background: var(--green-bright); box-shadow: 0 0 6px var(--green); }
+.pwned .result-status-dot { background: var(--red-bright);   box-shadow: 0 0 6px var(--red); }
 
-  .result.safe {
-    display: block;
-    background: var(--green-dim);
-    border: 1px solid rgba(34,201,138,0.2);
-  }
+.result-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.safe .result-title  { color: var(--green-bright); }
+.pwned .result-title { color: var(--red-bright); }
 
-  .result.pwned {
-    display: block;
-    background: var(--red-dim);
-    border: 1px solid rgba(255,77,109,0.2);
-  }
+.result-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.result-body strong { color: var(--text-primary); }
 
-  .result-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 6px;
-  }
+.result-count {
+  font-family: var(--mono);
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--red-bright);
+  display: block;
+  margin: 7px 0 3px;
+  letter-spacing: -0.02em;
+}
 
-  .result-icon { font-size: 20px; line-height: 1; }
+.hash-info {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  word-break: break-all;
+}
+.hash-prefix { color: var(--accent-light); }
 
-  .result-title {
-    font-family: var(--mono);
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-  }
+/* ─── FOOTER ─── */
+.footer {
+  text-align: center;
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
 
-  .safe .result-title { color: var(--green); }
-  .pwned .result-title { color: var(--red); }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(120,100,255,0.08);
+  border: 1px solid rgba(120,100,255,0.18);
+  border-radius: 20px;
+  padding: 4px 11px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(155,143,255,0.85);
+  letter-spacing: 0.07em;
+}
+.badge-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--accent-light);
+  border-radius: 50%;
+  animation: blink 2.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
 
-  .result-body {
-    font-size: 13px;
-    color: var(--text-muted);
-    line-height: 1.6;
-  }
+.footer-links {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.footer-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  transition: color 0.2s;
+}
+.footer-links a:hover { color: var(--text-secondary); }
 
-  .result-body strong { color: var(--text-primary); }
+/* ─── PWNED SCANLINES ─── */
+@keyframes scanmove { to { background-position: 0 100%; } }
 
-  .result-count {
-    font-family: var(--mono);
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--red);
-    display: block;
-    margin: 8px 0 4px;
-  }
-
-  /* Hash reveal */
-  .hash-info {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text-muted);
-  }
-
-  .hash-prefix {
-    color: var(--accent);
-    font-weight: 600;
-  }
-
-  /* Error */
-  .error-msg {
-    margin-top: 1rem;
-    padding: 12px 16px;
-    border-radius: var(--radius-sm);
-    background: rgba(245,158,11,0.08);
-    border: 1px solid rgba(245,158,11,0.2);
-    font-size: 13px;
-    color: var(--amber);
-    display: none;
-  }
-
-  .error-msg.visible { display: block; }
-
-  /* Footer */
-  .footer {
-    text-align: center;
-    margin-top: 1.5rem;
-    font-size: 12px;
-    color: var(--text-hint);
-    line-height: 1.7;
-  }
-
-  .footer a {
-    color: var(--text-muted);
-    text-decoration: none;
-    border-bottom: 1px solid var(--border);
-    transition: color 0.2s;
-  }
-  .footer a:hover { color: var(--text-primary); }
-
-  /* Scanline animation on pwned state */
-  @keyframes scanline {
-    0% { background-position: 0 0; }
-    100% { background-position: 0 100%; }
-  }
-
-  body.state-pwned::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      transparent,
-      transparent 2px,
-      rgba(255,77,109,0.015) 2px,
-      rgba(255,77,109,0.015) 4px
-    );
-    pointer-events: none;
-    z-index: 0;
-    animation: scanline 3s linear infinite;
-  }
+body.state-pwned::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    transparent, transparent 2px,
+    rgba(232,65,90,0.012) 2px, rgba(232,65,90,0.012) 4px
+  );
+  background-size: 100% 200%;
+  pointer-events: none;
+  z-index: 0;
+  animation: scanmove 4s linear infinite;
+}
 </style>
 </head>
 <body>
 
+<div class="glow" id="glow"></div>
+
 <div class="wrapper">
   <header class="header">
-    <div class="logo-badge">
-      <span class="dot"></span>
-      k-Anonymity Protected
-    </div>
-    <h1>Pwned<span>Checker</span></h1>
+    <h1>Pwned<em>Checker</em></h1>
     <p class="subtitle">Verifica si tu contraseña apareció en alguna filtración de datos. Tu contraseña <strong>nunca sale de tu dispositivo</strong> — solo enviamos 5 caracteres de su hash.</p>
   </header>
 
@@ -448,10 +576,22 @@
         autocomplete="new-password"
         spellcheck="false"
       >
-      <button class="eye-btn" id="eyeBtn" type="button" aria-label="Mostrar/ocultar contraseña">
-        <svg id="eyeIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
+      <button class="dice-btn" id="diceBtn" type="button" aria-label="Generar contraseña segura">
+        <svg class="dice-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="2" width="20" height="20" rx="4"/>
+          <circle cx="8"  cy="8"  r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="16" cy="8"  r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="8"  cy="16" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="16" cy="16" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+      </button>
+      <div class="input-divider"></div>
+      <button class="eye-btn" id="eyeBtn" type="button" aria-label="Mostrar u ocultar contraseña">
+        <svg class="eye-svg" id="eyeIcon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+          <path class="eye-path-outer" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+          <circle class="eye-path-pupil" cx="12" cy="12" r="3"/>
+          <line class="eye-path-slash" x1="3" y1="3" x2="21" y2="21"/>
         </svg>
       </button>
     </div>
@@ -459,7 +599,8 @@
     <div class="strength-section">
       <div class="strength-header">
         <span class="strength-label">Fortaleza</span>
-        <span class="strength-value" id="strengthValue">—</span>
+        <span class="strength-hint" id="strengthHint">Escribe para evaluar...</span>
+        <span class="strength-value" id="strengthValue"></span>
       </div>
       <div class="strength-bars">
         <div class="bar" id="bar0"></div>
@@ -469,43 +610,43 @@
       </div>
     </div>
 
-    <div class="criteria" id="criteria">
-      <div class="criterion" id="c-upper">
-        <div class="criterion-dot"></div>
-        Mayúsculas
-      </div>
-      <div class="criterion" id="c-lower">
-        <div class="criterion-dot"></div>
-        Minúsculas
-      </div>
-      <div class="criterion" id="c-number">
-        <div class="criterion-dot"></div>
-        Números
-      </div>
-      <div class="criterion" id="c-symbol">
-        <div class="criterion-dot"></div>
-        Símbolos
-      </div>
-      <div class="criterion" id="c-length">
-        <div class="criterion-dot"></div>
-        12+ caracteres
-      </div>
-      <div class="criterion" id="c-no-repeat">
-        <div class="criterion-dot"></div>
-        Sin repeticiones
+    <div class="criteria-wrap" id="criteriaWrap">
+      <div class="criteria-inner">
+        <div class="criteria">
+          <div class="criterion" id="c-upper">
+            <div class="criterion-icon"></div>Mayúsculas
+          </div>
+          <div class="criterion" id="c-lower">
+            <div class="criterion-icon"></div>Minúsculas
+          </div>
+          <div class="criterion" id="c-number">
+            <div class="criterion-icon"></div>Números
+          </div>
+          <div class="criterion" id="c-symbol">
+            <div class="criterion-icon"></div>Símbolos
+          </div>
+          <div class="criterion" id="c-length">
+            <div class="criterion-icon"></div>12+ caracteres
+          </div>
+          <div class="criterion" id="c-no-repeat">
+            <div class="criterion-icon"></div>Sin repeticiones
+          </div>
+        </div>
       </div>
     </div>
 
     <button class="check-btn" id="checkBtn" type="button">
-      <span class="btn-text">Verificar contraseña</span>
-      <span class="btn-loader">Consultando HIBP...</span>
+      <div class="btn-inner">
+        <div class="spinner"></div>
+        <span class="btn-text">Verificar contraseña</span>
+      </div>
     </button>
 
     <div class="error-msg" id="errorMsg"></div>
 
     <div class="result" id="resultBox">
       <div class="result-header">
-        <span class="result-icon" id="resultIcon"></span>
+        <div class="result-status-dot"></div>
         <span class="result-title" id="resultTitle"></span>
       </div>
       <div class="result-body" id="resultBody"></div>
@@ -515,55 +656,132 @@
   </div>
 
   <footer class="footer">
-    Funciona con <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange" target="_blank">Have I Been Pwned API</a> ·
-    <a href="https://en.wikipedia.org/wiki/K-anonymity" target="_blank">Modelo k-Anonymity</a><br>
-    Tu contraseña nunca se transmite. Solo se envían 5 caracteres del hash SHA-1.
+    <span class="badge">
+      <span class="badge-dot"></span>
+      k-Anonymity Protected
+    </span>
+    <div class="footer-links">
+      Funciona con <a href="https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange" target="_blank">Have I Been Pwned API</a> ·
+      <a href="https://en.wikipedia.org/wiki/K-anonymity" target="_blank">Modelo k-Anonymity</a><br>
+      Tu contraseña nunca se transmite. Solo se envían 5 caracteres del hash SHA-1.
+    </div>
   </footer>
 </div>
 
 <script>
-const input = document.getElementById('passwordInput');
-const eyeBtn = document.getElementById('eyeBtn');
-const eyeIcon = document.getElementById('eyeIcon');
-const checkBtn = document.getElementById('checkBtn');
-const resultBox = document.getElementById('resultBox');
-const resultIcon = document.getElementById('resultIcon');
-const resultTitle = document.getElementById('resultTitle');
-const resultBody = document.getElementById('resultBody');
-const hashInfo = document.getElementById('hashInfo');
-const errorMsg = document.getElementById('errorMsg');
-const strengthValue = document.getElementById('strengthValue');
-const criteria = document.getElementById('criteria');
-const mainCard = document.getElementById('mainCard');
-const bars = [0,1,2,3].map(i => document.getElementById('bar' + i));
+const input        = document.getElementById('passwordInput');
+const eyeBtn       = document.getElementById('eyeBtn');
+const eyeIcon      = document.getElementById('eyeIcon');
+const diceBtn      = document.getElementById('diceBtn');
+const checkBtn     = document.getElementById('checkBtn');
+const resultBox    = document.getElementById('resultBox');
+const resultTitle  = document.getElementById('resultTitle');
+const resultBody   = document.getElementById('resultBody');
+const hashInfo     = document.getElementById('hashInfo');
+const errorMsg     = document.getElementById('errorMsg');
+const strengthValue= document.getElementById('strengthValue');
+const strengthHint = document.getElementById('strengthHint');
+const criteriaWrap = document.getElementById('criteriaWrap');
+const mainCard     = document.getElementById('mainCard');
+const glow         = document.getElementById('glow');
+const bars         = [0,1,2,3].map(i => document.getElementById('bar' + i));
 
-const EYE_OPEN = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
-const EYE_CLOSED = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/>`;
-
+/* ─── EYE TOGGLE ─── */
 let showPassword = false;
 
 eyeBtn.addEventListener('click', () => {
   showPassword = !showPassword;
   input.type = showPassword ? 'text' : 'password';
-  eyeIcon.innerHTML = showPassword ? EYE_CLOSED : EYE_OPEN;
+  eyeIcon.classList.toggle('eye-revealed', showPassword);
 });
 
+/* ─── PASSWORD GENERATOR — Web Crypto API ─── */
+function generatePassword(length = 18) {
+  const UPPER   = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const LOWER   = 'abcdefghijklmnopqrstuvwxyz';
+  const NUMBERS = '0123456789';
+  const SYMBOLS = '!@#$%^&*()-_=+[]{}|;:,.<>?';
+  const ALL = UPPER + LOWER + NUMBERS + SYMBOLS;
+
+  // Garantizar al menos un char de cada grupo
+  const required = [
+    UPPER  [cryptoRand(UPPER.length)],
+    LOWER  [cryptoRand(LOWER.length)],
+    NUMBERS[cryptoRand(NUMBERS.length)],
+    SYMBOLS[cryptoRand(SYMBOLS.length)],
+  ];
+
+  const rest = Array.from({ length: length - required.length },
+    () => ALL[cryptoRand(ALL.length)]
+  );
+
+  // Fisher-Yates shuffle criptográfico
+  const chars = [...required, ...rest];
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = cryptoRand(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+
+  return chars.join('');
+}
+
+function cryptoRand(max) {
+  const buf = new Uint32Array(1);
+  let result;
+  // Rejection sampling — elimina modulo bias
+  const limit = 0xFFFFFFFF - (0xFFFFFFFF % max);
+  do {
+    window.crypto.getRandomValues(buf);
+    result = buf[0];
+  } while (result > limit);
+  return result % max;
+}
+
+diceBtn.addEventListener('click', () => {
+  const pwd = generatePassword(18);
+
+  // Revelar caracteres automáticamente para que el usuario vea lo que se generó
+  input.type = 'text';
+  showPassword = true;
+  eyeIcon.classList.add('eye-revealed');
+
+  // Animar el relleno letra por letra
+  input.value = '';
+  clearResult();
+  let i = 0;
+  const interval = setInterval(() => {
+    input.value = pwd.slice(0, ++i);
+    input.dispatchEvent(new Event('input'));
+    if (i >= pwd.length) clearInterval(interval);
+  }, 18);
+
+  input.focus();
+});
+
+/* ─── STRENGTH ANALYSIS ─── */
 function analyzeStrength(pwd) {
-  if (!pwd) return { score: 0, label: '—', checks: {} };
+  if (!pwd) return { score: 0, checks: {} };
   const checks = {
-    upper: /[A-Z]/.test(pwd),
-    lower: /[a-z]/.test(pwd),
-    number: /[0-9]/.test(pwd),
-    symbol: /[^A-Za-z0-9]/.test(pwd),
-    length: pwd.length >= 12,
+    upper:    /[A-Z]/.test(pwd),
+    lower:    /[a-z]/.test(pwd),
+    number:   /[0-9]/.test(pwd),
+    symbol:   /[^A-Za-z0-9]/.test(pwd),
+    length:   pwd.length >= 12,
     noRepeat: !/(.)(\1{2,})/.test(pwd)
   };
   const score = Object.values(checks).filter(Boolean).length;
-  const labels = ['—', 'Muy débil', 'Débil', 'Media', 'Buena', 'Fuerte', 'Excelente'];
-  const colors = ['', '#ff4d6d', '#ff4d6d', '#f59e0b', '#60a5fa', '#22c98a', '#22c98a'];
-  const barClasses = ['', 'weak', 'weak', 'fair', 'good', 'strong', 'strong'];
-  return { score, label: labels[score] || 'Excelente', color: colors[score], barClass: barClasses[score], checks };
+  return { score, checks };
 }
+
+const STRENGTH_CONFIGS = [
+  null,
+  { label: 'Muy débil', color: 'var(--red)',      barClass: 'weak',   activeBars: 1 },
+  { label: 'Débil',     color: 'var(--red)',      barClass: 'weak',   activeBars: 1 },
+  { label: 'Media',     color: 'var(--amber)',    barClass: 'fair',   activeBars: 2 },
+  { label: 'Buena',     color: 'var(--blue-mid)', barClass: 'good',   activeBars: 3 },
+  { label: 'Fuerte',    color: 'var(--green)',    barClass: 'strong', activeBars: 4 },
+  { label: 'Excelente', color: 'var(--green)',    barClass: 'strong', activeBars: 4 },
+];
 
 input.addEventListener('input', () => {
   const pwd = input.value;
@@ -571,46 +789,55 @@ input.addEventListener('input', () => {
 
   if (!pwd) {
     bars.forEach(b => { b.className = 'bar'; });
-    strengthValue.textContent = '—';
+    strengthValue.textContent = '';
+    strengthValue.className = 'strength-value';
     strengthValue.style.color = '';
-    criteria.classList.remove('visible');
+    strengthHint.classList.remove('hidden');
+    criteriaWrap.classList.remove('open');
     return;
   }
 
-  const { score, label, color, barClass, checks } = analyzeStrength(pwd);
-  criteria.classList.add('visible');
+  const { score, checks } = analyzeStrength(pwd);
+  const cfg = STRENGTH_CONFIGS[score];
+
+  strengthHint.classList.add('hidden');
+  strengthValue.className = 'strength-value visible';
+  strengthValue.textContent = cfg ? cfg.label : 'Excelente';
+  strengthValue.style.color = cfg ? cfg.color : 'var(--green)';
 
   bars.forEach((bar, i) => {
-    bar.className = 'bar' + (i < score ? ` ${barClass} active` : '');
+    const active = i < (cfg ? cfg.activeBars : 4);
+    bar.className = 'bar' + (active ? ` ${cfg ? cfg.barClass : 'strong'} lit` : '');
   });
 
-  strengthValue.textContent = label;
-  strengthValue.style.color = color;
+  criteriaWrap.classList.add('open');
 
-  const criteriaMap = {
-    'c-upper': checks.upper,
-    'c-lower': checks.lower,
-    'c-number': checks.number,
-    'c-symbol': checks.symbol,
-    'c-length': checks.length,
-    'c-no-repeat': checks.noRepeat
+  const map = {
+    'c-upper':    checks.upper,
+    'c-lower':    checks.lower,
+    'c-number':   checks.number,
+    'c-symbol':   checks.symbol,
+    'c-length':   checks.length,
+    'c-no-repeat':checks.noRepeat
   };
-
-  for (const [id, met] of Object.entries(criteriaMap)) {
+  for (const [id, met] of Object.entries(map)) {
     document.getElementById(id).classList.toggle('met', met);
   }
 });
 
+/* ─── CLEAR STATE ─── */
 function clearResult() {
   resultBox.className = 'result';
   errorMsg.className = 'error-msg';
   mainCard.className = 'card';
+  glow.className = 'glow';
   document.body.className = '';
 }
 
+/* ─── CHECK ─── */
 checkBtn.addEventListener('click', async () => {
   const pwd = input.value.trim();
-  if (!pwd) return;
+  if (!pwd) { input.focus(); return; }
 
   clearResult();
   checkBtn.classList.add('loading');
@@ -624,7 +851,7 @@ checkBtn.addEventListener('click', async () => {
     });
 
     if (res.status === 429) {
-      showError('⏱ Demasiadas consultas. Espera un minuto antes de intentar de nuevo.');
+      showError('Demasiadas consultas. Espera un minuto antes de intentar de nuevo.');
       return;
     }
 
@@ -648,24 +875,23 @@ checkBtn.addEventListener('click', async () => {
 function showResult(data) {
   if (data.vulnerada) {
     resultBox.className = 'result pwned';
-    resultIcon.textContent = '🔴';
     resultTitle.textContent = 'Contraseña comprometida';
-    resultBody.innerHTML = `Esta contraseña apareció en filtraciones de datos públicas:<br>
+    resultBody.innerHTML = `Esta contraseña aparece en bases de datos de filtraciones públicas:
       <span class="result-count">${data.veces.toLocaleString('es-PE')}</span>
       veces registrada. <strong>No la uses en ningún servicio.</strong>`;
     mainCard.className = 'card state-pwned';
+    glow.className = 'glow state-pwned';
     document.body.className = 'state-pwned';
   } else {
     resultBox.className = 'result safe';
-    resultIcon.textContent = '🟢';
     resultTitle.textContent = 'Sin filtraciones detectadas';
-    resultBody.innerHTML = `Esta contraseña <strong>no fue encontrada</strong> en las bases de datos de filtraciones conocidas. Recuerda que esto no garantiza que sea segura — también importa la fortaleza.`;
+    resultBody.innerHTML = `Esta contraseña <strong>no fue encontrada</strong> en las bases de datos de filtraciones conocidas. Recuerda que esto no garantiza que sea segura — también importa su fortaleza.`;
     mainCard.className = 'card state-safe';
+    glow.className = 'glow state-safe';
   }
 
   if (data.hash_prefix) {
-    hashInfo.innerHTML = `Prefijo SHA-1 enviado: <span class="hash-prefix">${data.hash_prefix}</span>XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX<br>
-    Tu contraseña nunca viajó por la red.`;
+    hashInfo.innerHTML = `Prefijo enviado: <span class="hash-prefix">${data.hash_prefix}</span>${'·'.repeat(35)}<br>Tu contraseña nunca viajó por la red.`;
   }
 }
 
@@ -674,10 +900,7 @@ function showError(msg) {
   errorMsg.className = 'error-msg visible';
 }
 
-// Enter key support
-input.addEventListener('keydown', e => {
-  if (e.key === 'Enter') checkBtn.click();
-});
+input.addEventListener('keydown', e => { if (e.key === 'Enter') checkBtn.click(); });
 </script>
 </body>
 </html>
